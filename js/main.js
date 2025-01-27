@@ -1,119 +1,182 @@
 import { loadData, getTopics, getQuestionsForTopic } from "./data.js";
-import { mainScreenTemplate, questionScreenTemplate } from "./templates.js";
+import {
+  mainScreenTemplate,
+  questionScreenTemplate,
+  resultsScreenTemplate,
+} from "./templates.js";
+import { createStore } from "./store.js";
 
 const main = document.getElementById("main");
 
-function createStore(initialState) {
-  let state = { ...initialState };
-  const subscribers = [];
-
-  function subscribe(fn) {
-    subscribers.push(fn);
-  }
-
-  function getState() {
-    return state;
-  }
-
-  function setState(newState) {
-    state = { ...state, ...newState };
-    subscribers.forEach((fn) => fn(state));
-  }
-
-  return { subscribe, getState, setState };
-}
-
-// Initialize the immutable store
 const store = createStore({
+  page: "main",
   currentTopic: null,
   currentScore: 0,
   currentQuestion: 0,
   selectedAnswer: null,
   correctAnswer: null,
-  submited: false,
+  submitted: false,
+  data: null,
 });
 
-// Subscribe to highlight selected answers
 store.subscribe((state) => {
-  const questionBtns = document.querySelectorAll("#question-option-btn");
-
-  questionBtns.forEach((btn) => {
-    if (state.submited) {
-      if (
-        btn.dataset.answer === state.selectedAnswer &&
-        btn.dataset.answer === state.correctAnswer
-      ) {
-        btn.classList.add("correct");
-        btn.classList.remove("selected");
-      }
-      questionBtns.forEach((btn) => {
-        btn.disabled = true;
-      });
-    }
-
-    if (btn.dataset.answer === state.selectedAnswer) {
-      btn.classList.add("selected");
-    } else {
-      btn.classList.remove("selected");
-    }
-  });
+  render(state);
+  highlightSelectedAnswers(state);
 });
 
-function checkAnswer(questions) {
-  const { currentQuestion, selectedAnswer, currentScore } = store.getState();
-  const correctAnswer = questions[currentQuestion].answer;
+function render(state) {
+  const { page, data } = state;
 
-  if (selectedAnswer === correctAnswer) {
-    store.setState({ currentScore: currentScore + 1 });
+  if (!data) {
+    // Data hasn't loaded yet
+    main.innerHTML = "<p>Loading...</p>";
+    return;
   }
 
-  store.setState({ submited: true });
-  console.log(store.getState());
+  if (page === "main") {
+    main.innerHTML = mainScreenTemplate(getTopics(data));
+    attachMainScreenListeners();
+    return;
+  }
+
+  if (page === "question") {
+    const questions = getQuestionsForTopic(data, state.currentTopic);
+    main.innerHTML = questionScreenTemplate(
+      questions[state.currentQuestion],
+      state.currentQuestion + 1,
+      questions.length
+    );
+    attachQuestionScreenListeners();
+  }
+
+  if (page === "results") {
+    main.innerHTML = resultsScreenTemplate(
+      state.currentScore,
+      getQuestionsForTopic(data, state.currentTopic).length
+    );
+    attachResultsScreenListeners();
+  }
 }
 
-export function startQuiz(data, topic) {
-  const questions = getQuestionsForTopic(data, topic);
+function highlightSelectedAnswers(state) {
+  const { selectedAnswer, correctAnswer, submitted } = state;
+  const questionBtns = document.querySelectorAll("[data-answer]");
 
-  // Update store instead of local state
-  store.setState({
-    currentTopic: topic,
-    currentScore: 0,
-    currentQuestion: 0,
-    selectedAnswer: null,
-    correctAnswer: questions[0].answer,
-    submited: false,
+  questionBtns.forEach((btn) => {
+    // Remove any existing classes
+    btn.classList.remove("correct", "incorrect", "selected");
+
+    // If question is submitted, highlight correct/incorrect
+    if (submitted) {
+      const answer = btn.dataset.answer;
+      if (answer === selectedAnswer && answer === correctAnswer) {
+        btn.classList.add("correct");
+      } else if (answer === selectedAnswer && answer !== correctAnswer) {
+        btn.classList.add("incorrect");
+      }
+      // Disable all choices if submitted
+      btn.disabled = true;
+    } else {
+      // If we haven't submitted, highlight the selected one
+      if (btn.dataset.answer === selectedAnswer) {
+        btn.classList.add("selected");
+      }
+      btn.disabled = false;
+    }
   });
 
-  main.innerHTML = questionScreenTemplate(
-    questions[store.getState().currentQuestion],
-    store.getState().currentQuestion + 1,
-    questions.length
-  );
+  // Update submit button text
+  const submitBtn = document.getElementById("submit-btn");
+  if (submitBtn) {
+    submitBtn.innerHTML = submitted ? "Next Question" : "Submit";
+  }
+}
 
-  // Event listeners for question options
-  const questionBtns = document.querySelectorAll("#question-option-btn");
+function attachMainScreenListeners() {
+  const topicBtns = document.querySelectorAll("#topic-btn");
+  topicBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      // Start quiz with the chosen topic
+      store.setState({
+        page: "question",
+        currentTopic: btn.dataset.topic,
+        currentScore: 0,
+        currentQuestion: 0,
+        selectedAnswer: null,
+        correctAnswer: null,
+        submitted: false,
+      });
+    });
+  });
+}
+
+function attachQuestionScreenListeners() {
+  const state = store.getState();
+  const questions = getQuestionsForTopic(state.data, state.currentTopic);
+
+  // 1) Answer choice buttons
+  const questionBtns = document.querySelectorAll("[data-answer]");
   questionBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
       store.setState({ selectedAnswer: btn.dataset.answer });
     });
   });
 
+  // 2) Submit or Next question button
   const submitBtn = document.getElementById("submit-btn");
-  submitBtn.addEventListener("click", () => {
-    if (store.getState().selectedAnswer) {
-      checkAnswer(questions);
-    }
+  if (submitBtn) {
+    submitBtn.addEventListener("click", () => {
+      const { submitted, currentQuestion, selectedAnswer } = store.getState();
+
+      // If already submitted, go to next question or end quiz
+      if (submitted) {
+        if (currentQuestion + 1 < questions.length) {
+          store.setState({
+            currentQuestion: currentQuestion + 1,
+            selectedAnswer: null,
+            correctAnswer: null,
+            submitted: false,
+          });
+        } else {
+          // No more questions, go back to main screen
+          store.setState({ page: "results" });
+        }
+      } else {
+        // If not submitted, but user has chosen an answer, check it
+        if (selectedAnswer) {
+          checkAnswer();
+        }
+      }
+    });
+  }
+}
+
+function attachResultsScreenListeners() {
+  const restartBtn = document.getElementById("restart-btn");
+  restartBtn.addEventListener("click", () => {
+    store.setState({ page: "main" });
+  });
+}
+
+function checkAnswer() {
+  const state = store.getState();
+  const questions = getQuestionsForTopic(state.data, state.currentTopic);
+  const { currentQuestion, selectedAnswer, currentScore } = state;
+  const correctAnswer = questions[currentQuestion].answer;
+
+  // If correct, increment score
+  if (selectedAnswer === correctAnswer) {
+    store.setState({ currentScore: currentScore + 1 });
+  }
+
+  // We also store the correct answer so the highlight logic can use it
+  store.setState({
+    submitted: true,
+    correctAnswer,
   });
 }
 
 loadData().then((data) => {
-  main.innerHTML = mainScreenTemplate(getTopics(data));
-
-  const topicBtns = document.querySelectorAll("#topic-btn");
-
-  topicBtns.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      startQuiz(data, btn.dataset.topic);
-    });
-  });
+  // Put data in store, triggering the first render
+  store.setState({ data });
 });
