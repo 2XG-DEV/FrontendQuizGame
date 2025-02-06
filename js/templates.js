@@ -12,7 +12,7 @@ export function mainScreenTemplate(topics) {
       <div class="main__container">
           <div class="main__title-section">
               <h1 class="main__title">
-                  Welcome to the <span class="bold">Frontend Quiz!</span>
+                  Welcome to the </br> <span class="bold">Frontend Quiz!</span>
               </h1>
               <p class="main__subtitle">Pick a subject to get started.</p>
           </div>
