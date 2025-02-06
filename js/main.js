@@ -50,9 +50,12 @@ function render(state) {
   }
 
   if (page === "results") {
+    console.log(state);
     main.innerHTML = resultsScreenTemplate(
       state.currentScore,
-      getQuestionsForTopic(data, state.currentTopic).length
+      getQuestionsForTopic(data, state.currentTopic).length,
+      state.currentTopic,
+      state.data.quizzes.find((quiz) => quiz.title === state.currentTopic).icon
     );
     attachResultsScreenListeners();
   }

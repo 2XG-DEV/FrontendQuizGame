@@ -79,15 +79,28 @@ function questionOptionsTemplate(options) {
     .join("");
 }
 
-export function resultsScreenTemplate(score, totalQuestions) {
+export function resultsScreenTemplate(score, totalQuestions, category, icon) {
   return `
     <div class="main__container">
       <div class="question__container">
-        <h2 class="question__title">Quiz Complete!</h2>
-        <p class="question__subtitle">
-          You scored ${score} out of ${totalQuestions}.
-        </p>
-        <button id="restart-btn" class="btn">Restart Quiz</button>
+        <h2 class="results__title">Quiz Completed</h2>
+        <h2 class="results__title--bold">You scored..</h2>
+        <div class="results__score-container">
+          <div class="results__score__header">
+            <img src="${icon}" alt="" />
+            <p>${category}</p>
+          </div>
+
+          <p class="results__score">
+            ${score}
+          </p>
+
+          <p class="results__total">
+            out of ${totalQuestions}
+          </p>
+        </div>
+ 
+        <button id="restart-btn" class="btn" >Play Again</button>
       </div>
     </div>`;
 }
